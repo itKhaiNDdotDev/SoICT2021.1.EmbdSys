@@ -1,0 +1,787 @@
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE DISPLAYLED
+OBJECT MODULE PLACED IN .\Objects\DisplayLED.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE DisplayLED.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listing
+                    -s\DisplayLED.lst) TABS(2) OBJECT(.\Objects\DisplayLED.obj)
+
+line level    source
+
+   1          #include "string.h"
+   2          #include "reg51.h"
+   3          
+   4          sbit SPK  = P3^7;
+   5          unsigned char note_index; 
+   6          unsigned char uart_data;
+   7          code unsigned int note_table[]={
+   8              0xf2,0x3d,        // C3
+   9              0xf3,0x03,        // C#3
+  10              0xf3,0xbe,        // D3
+  11              0xf4,0x63,        // D#3
+  12              0xf5,0x14,        // E3
+  13              0xf5,0xb1,        // F3
+  14              0xf6,0x45,        // F#3
+  15             0xf6,0xd1,         // G3
+  16              0xf7,0x54,        // G#3
+  17              0xf7,0xd1,        // A3
+  18              0xf8,0x47,        // A#3
+  19              0xf8,0xb6,        // B3
+  20              0xf9,0x1f,        // C4
+  21             0xf9,0x82,         // C#4
+  22              0xf9,0xdf,        // D4
+  23              0xfa,0x37,        // D#4
+  24              0xfa,0x8A,        // E4
+  25              0xfa,0xd9,        // F4
+  26              0xfb,0x23,        // F#4
+  27             0xfb,0x69,         // G4
+  28              0xfb,0xaa,        // G#4
+  29              0xfb,0xe8,        // A4
+  30              0xfb,0x24,        // A#4
+  31              0xf5,0x5a,        // B4
+  32              0xf5,0x8f,        // C5
+  33               0xf2,0xc1,       // C#5
+  34              0xf3,0xef,        // D5
+  35              0xf3,0x1b,        // D#5
+  36              0xf4,0x45,        // E5
+  37              0xf5,0x6c,        // F5
+  38              0xf5,0x91,        // F#5
+  39               0xf2,0xb4,       // G5
+  40              0xf3,0xd5,        // G#5
+  41              0xf3,0xf4,        // A5
+  42              0xf4,0x11,        // A#5
+  43              0xf5,0x2e,        // B5
+  44          };
+  45          unsigned char song[]={ //Danh sÃ¡ch cÃ¡c note cá»§a Ä‘oáº¡n nháº¡c
+  46            10,10,0,0,4,4,0,
+  47            10,10,0,0,4,4,0,
+  48            0,0,4,8,10,10,
+  49            0,0,4,8,10,10
+  50          };
+  51          void init(); //HÃ m thiáº¿t láº­p cháº¿ Ä‘á»™ hoáº¡t Ä‘á»™ng 1 cá»§a timer0
+  52          void delay(unsigned int time);
+  53          
+  54          //Dinh nghia mot so chan de dieu khien den LCD
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 2   
+
+  55          #define LCD_DATA P2
+  56          sbit EN=P0^2;
+  57          sbit RS=P0^0;
+  58          sbit RW=P0^1;    
+  59          //Khai bao prototype cho cac ham dieu khien den LCD
+  60          void Init_System(); 
+  61          void Delay_ms(int interval);  
+  62          void LCD_init();
+  63          void Wait_For_LCD();
+  64          void LCD_Send_Command(unsigned char x);
+  65          void LCD_Write_One_Char(unsigned char c);
+  66          void LCD_Write_String(unsigned char *s);
+  67          void main()
+  68          {
+  69   1        unsigned char i;  
+  70   1        init();
+  71   1        SCON = 0x50;      /* uart in mode 1 (8 bit), REN=1 */
+  72   1          TMOD = TMOD | 0x20 ;  /* Timer 1 in mode 2 */
+  73   1          TH1 = 0xFD;       /* 9600 Bds at 11.0592MHz */
+  74   1        TL1 = 0xFD;       /* 9600 Bds at 11.0592MHz */
+  75   1          ES = 1;         /* Enable serial interrupt*/
+  76   1          EA = 1;         /* Enable global interrupt */
+  77   1          TR1 = 1;
+  78   1        
+  79   1        Init_System();
+  80   1        LCD_init();
+  81   1        
+  82   1        note_index=0;
+  83   1          for(i=0;i<26;i++){ //ChÆ¡i má»™t Ä‘oáº¡n nháº¡c theo danh sÃ¡ch cÃ¡c note á»Ÿ má�
+             -�£ng song[]
+  84   2            note_index = song[i];   
+  85   2            TH0=note_table[note_index];
+  86   2            TL0=note_table[note_index+1];     
+  87   2            TR0=1;
+  88   2            delay(50000);
+  89   2            TR0=0;
+  90   2            SPK=1;
+  91   2            delay(30000);
+  92   2            note_index+=2;      
+  93   2          }
+  94   1          delay(50000);
+  95   1      
+  96   1        while(1){ //vÃ²ng láº·p vÃ´ háº¡n xá»­ lÃ½ sá»± kiá»‡n nháº¥n phÃ­m
+  97   2        note_index=0;
+  98   2          switch(uart_data){
+  99   3      
+ 100   3          case 'Z': //sáº½ hiá»ƒn thá»‹ "C3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡n
+             -g á»©ng lÃ  note Ä‘Ã´
+ 101   3      
+ 102   3              note_index=0;
+ 103   3              TH0=note_table[note_index];
+ 104   3              TL0=note_table[note_index+1];     
+ 105   3              TR0=1;
+ 106   3              delay(50000);
+ 107   3              TR0=0;
+ 108   3              SPK=1;
+ 109   3              //delay(30000);
+ 110   3              LCD_init();
+ 111   3              LCD_Write_String("C3");
+ 112   3              uart_data='o';
+ 113   3              break;
+ 114   3            
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 3   
+
+ 115   3            case 'X' : // hiá»ƒn thá»‹ "C#3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á
+             -»©ng lÃ  note rÃª
+ 116   3          
+ 117   3              note_index=2;
+ 118   3              TH0=note_table[note_index];
+ 119   3              TL0=note_table[note_index+1];     
+ 120   3              TR0=1;
+ 121   3              delay(50000);
+ 122   3              TR0=0;
+ 123   3              SPK=1;
+ 124   3              //delay(30000);
+ 125   3              LCD_init();
+ 126   3              LCD_Write_String("C#3");uart_data='o';
+ 127   3              break;
+ 128   3      
+ 129   3            case 'C': // hiá»ƒn thá»‹ "D3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note mi
+ 130   3            
+ 131   3              note_index=4;
+ 132   3              TH0=note_table[note_index];
+ 133   3              TL0=note_table[note_index+1];     
+ 134   3              TR0=1;
+ 135   3              delay(50000);
+ 136   3              TR0=0;
+ 137   3              SPK=1;
+ 138   3              //delay(30000);
+ 139   3              LCD_init();
+ 140   3              LCD_Write_String("D3");uart_data='o';
+ 141   3              break;
+ 142   3      
+ 143   3            case 'V': //hiá»ƒn thá»‹ "D#3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note fa
+ 144   3      
+ 145   3              note_index=6;
+ 146   3              TH0=note_table[note_index];
+ 147   3              TL0=note_table[note_index+1];     
+ 148   3              TR0=1;
+ 149   3              delay(50000);
+ 150   3              TR0=0;
+ 151   3              SPK=1;
+ 152   3              delay(30000);
+ 153   3              LCD_init();
+ 154   3              LCD_Write_String("D#3");  uart_data='o';
+ 155   3              break;
+ 156   3      
+ 157   3            case 'B': // hiá»ƒn thá»‹ "E3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note sol
+ 158   3      
+ 159   3              note_index=8;
+ 160   3              TH0=note_table[note_index];
+ 161   3              TL0=note_table[note_index+1];     
+ 162   3              TR0=1;
+ 163   3              delay(50000);
+ 164   3              TR0=0;
+ 165   3              SPK=1;
+ 166   3              //delay(30000);
+ 167   3              LCD_init();
+ 168   3              LCD_Write_String("E3");  uart_data='o';
+ 169   3              break;
+ 170   3      
+ 171   3            case 'N': //hiá»ƒn thá»‹ "F3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note la
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 4   
+
+ 172   3      
+ 173   3              note_index=10;
+ 174   3              TH0=note_table[note_index];
+ 175   3              TL0=note_table[note_index+1];     
+ 176   3              TR0=1;
+ 177   3              delay(50000);
+ 178   3              TR0=0;
+ 179   3              SPK=1;
+ 180   3              //delay(30000);
+ 181   3              LCD_init();
+ 182   3              LCD_Write_String("F3"); uart_data='o';
+ 183   3              break;
+ 184   3      
+ 185   3            case 'M': //hiá»ƒn thá»‹ "F#3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 186   3      
+ 187   3              note_index=12;
+ 188   3              TH0=note_table[note_index];
+ 189   3              TL0=note_table[note_index+1];     
+ 190   3              TR0=1;
+ 191   3              delay(50000);
+ 192   3              TR0=0;
+ 193   3              SPK=1;
+ 194   3              //delay(30000);
+ 195   3              LCD_init();
+ 196   3              LCD_Write_String("F#3");  uart_data='o';
+ 197   3              break;
+ 198   3       
+ 199   3            case 'A': //hiá»ƒn thá»‹ "G3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 200   3      
+ 201   3              note_index=14;
+ 202   3              TH0=note_table[note_index];
+ 203   3              TL0=note_table[note_index+1];     
+ 204   3              TR0=1;
+ 205   3              delay(50000);
+ 206   3              TR0=0;
+ 207   3              SPK=1;
+ 208   3              //delay(30000);
+ 209   3              LCD_init();
+ 210   3              LCD_Write_String("G3"); uart_data='o';
+ 211   3              break;
+ 212   3            
+ 213   3            case 'S': // hiá»ƒn thá»‹ "G#3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á�
+             -�©ng lÃ  note si
+ 214   3      
+ 215   3              note_index=16;
+ 216   3              TH0=note_table[note_index];
+ 217   3              TL0=note_table[note_index+1];     
+ 218   3              TR0=1;
+ 219   3              delay(50000);
+ 220   3              TR0=0;
+ 221   3              SPK=1;
+ 222   3              //delay(30000);
+ 223   3              LCD_init();
+ 224   3              LCD_Write_String("G#3");  uart_data='o';
+ 225   3              break;
+ 226   3            
+ 227   3            case 'D': // hiá»ƒn thá»‹ "A3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 228   3      
+ 229   3              note_index=18;
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 5   
+
+ 230   3              TH0=note_table[note_index];
+ 231   3              TL0=note_table[note_index+1];     
+ 232   3              TR0=1;
+ 233   3              delay(50000);
+ 234   3              TR0=0;
+ 235   3              SPK=1;
+ 236   3              //delay(30000);
+ 237   3              LCD_init();
+ 238   3              LCD_Write_String("A3"); uart_data='o';
+ 239   3              break;
+ 240   3            
+ 241   3            case 'F': // hiá»ƒn thá»‹ "A#3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á�
+             -�©ng lÃ  note si
+ 242   3      
+ 243   3              note_index=20;
+ 244   3              TH0=note_table[note_index];
+ 245   3              TL0=note_table[note_index+1];     
+ 246   3              TR0=1;
+ 247   3              delay(50000);
+ 248   3              TR0=0;
+ 249   3              SPK=1;
+ 250   3              //delay(30000);
+ 251   3              LCD_init();
+ 252   3              LCD_Write_String("A#3");  uart_data='o';
+ 253   3              break;
+ 254   3            
+ 255   3            case 'G': // hiá»ƒn thá»‹ "B3" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 256   3      
+ 257   3              note_index=22;
+ 258   3              TH0=note_table[note_index];
+ 259   3              TL0=note_table[note_index+1];     
+ 260   3              TR0=1;
+ 261   3              delay(50000);
+ 262   3              TR0=0;
+ 263   3              SPK=1;
+ 264   3              //delay(30000);
+ 265   3              LCD_init();
+ 266   3              LCD_Write_String("B3"); uart_data='o';
+ 267   3              break;
+ 268   3            
+ 269   3            case 'H': //hiá»ƒn thá»‹ "C4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 270   3      
+ 271   3              note_index=24;
+ 272   3              TH0=note_table[note_index];
+ 273   3              TL0=note_table[note_index+1];     
+ 274   3              TR0=1;
+ 275   3              delay(50000);
+ 276   3              TR0=0;
+ 277   3              SPK=1;
+ 278   3              //delay(30000);
+ 279   3              LCD_init();
+ 280   3              LCD_Write_String("C4"); uart_data='o';
+ 281   3              break;
+ 282   3            
+ 283   3            case 'J': //hiá»ƒn thá»‹ "C#4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 284   3      
+ 285   3              note_index=26;
+ 286   3              TH0=note_table[note_index];
+ 287   3              TL0=note_table[note_index+1];     
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 6   
+
+ 288   3              TR0=1;
+ 289   3              delay(50000);
+ 290   3              TR0=0;
+ 291   3              SPK=1;
+ 292   3              //delay(30000);
+ 293   3              LCD_init();
+ 294   3              LCD_Write_String("C#4");  uart_data='o';
+ 295   3              break;
+ 296   3            
+ 297   3            case 'K': //hiá»ƒn thá»‹ "D4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 298   3      
+ 299   3              note_index=28;
+ 300   3              TH0=note_table[note_index];
+ 301   3              TL0=note_table[note_index+1];     
+ 302   3              TR0=1;
+ 303   3              delay(50000);
+ 304   3              TR0=0;
+ 305   3              SPK=1;
+ 306   3              //delay(30000);
+ 307   3              LCD_init();
+ 308   3              LCD_Write_String("D4"); uart_data='o';
+ 309   3              break;
+ 310   3            
+ 311   3            case 'L': //hiá»ƒn thá»‹ "D#4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 312   3      
+ 313   3              note_index=30;
+ 314   3              TH0=note_table[note_index];
+ 315   3              TL0=note_table[note_index+1];     
+ 316   3              TR0=1;
+ 317   3              delay(50000);
+ 318   3              TR0=0;
+ 319   3              SPK=1;
+ 320   3              //delay(30000);
+ 321   3              LCD_init();
+ 322   3              LCD_Write_String("D#4");  uart_data='o';
+ 323   3              break;
+ 324   3            
+ 325   3            case 'Q': //hiá»ƒn thá»‹ "E4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 326   3      
+ 327   3              note_index=32;
+ 328   3              TH0=note_table[note_index];
+ 329   3              TL0=note_table[note_index+1];     
+ 330   3              TR0=1;
+ 331   3              delay(50000);
+ 332   3              TR0=0;
+ 333   3              SPK=1;
+ 334   3              //delay(30000);
+ 335   3              LCD_init();
+ 336   3              LCD_Write_String("E4"); uart_data='o';
+ 337   3              break;
+ 338   3            
+ 339   3            case 'W': //hiá»ƒn thá»‹ "F4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 340   3      
+ 341   3              note_index=34;
+ 342   3              TH0=note_table[note_index];
+ 343   3              TL0=note_table[note_index+1];     
+ 344   3              TR0=1;
+ 345   3              delay(50000);
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 7   
+
+ 346   3              TR0=0;
+ 347   3              SPK=1;
+ 348   3              //delay(30000);
+ 349   3              LCD_init();
+ 350   3              LCD_Write_String("F4"); uart_data='o';
+ 351   3              break;
+ 352   3            
+ 353   3            case 'E': // hiá»ƒn thá»‹ "F#4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á�
+             -�©ng lÃ  note si
+ 354   3      
+ 355   3              note_index=36;
+ 356   3              TH0=note_table[note_index];
+ 357   3              TL0=note_table[note_index+1];     
+ 358   3              TR0=1;
+ 359   3              delay(50000);
+ 360   3              TR0=0;
+ 361   3              SPK=1;
+ 362   3              //delay(30000);
+ 363   3              LCD_init();
+ 364   3              LCD_Write_String("F#4");  uart_data='o';
+ 365   3              break;
+ 366   3            
+ 367   3            case 'R': // hiá»ƒn thá»‹ "G4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 368   3      
+ 369   3              note_index=38;
+ 370   3              TH0=note_table[note_index];
+ 371   3              TL0=note_table[note_index+1];     
+ 372   3              TR0=1;
+ 373   3              delay(50000);
+ 374   3              TR0=0;
+ 375   3              SPK=1;
+ 376   3              //delay(30000);
+ 377   3              LCD_init();
+ 378   3              LCD_Write_String("G4"); uart_data='o';
+ 379   3              break;
+ 380   3            
+ 381   3            case 'T': //hiá»ƒn thá»‹ "G#4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 382   3      
+ 383   3              note_index=40;
+ 384   3              TH0=note_table[note_index];
+ 385   3              TL0=note_table[note_index+1];     
+ 386   3              TR0=1;
+ 387   3              delay(50000);
+ 388   3              TR0=0;
+ 389   3              SPK=1;
+ 390   3              //delay(30000);
+ 391   3              LCD_init();
+ 392   3              LCD_Write_String("G#4");  uart_data='o';
+ 393   3              break;
+ 394   3            
+ 395   3            case 'Y': //hiá»ƒn thá»‹ "A4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 396   3      
+ 397   3              note_index=42;
+ 398   3              TH0=note_table[note_index];
+ 399   3              TL0=note_table[note_index+1];     
+ 400   3              TR0=1;
+ 401   3              delay(50000);
+ 402   3              TR0=0;
+ 403   3              SPK=1;
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 8   
+
+ 404   3              //delay(30000);
+ 405   3              LCD_init();
+ 406   3              LCD_Write_String("A4"); uart_data='o';
+ 407   3              break;
+ 408   3            
+ 409   3            case 'U': //hiá»ƒn thá»‹ "A#4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 410   3      
+ 411   3              note_index=44;
+ 412   3              TH0=note_table[note_index];
+ 413   3              TL0=note_table[note_index+1];     
+ 414   3              TR0=1;
+ 415   3              delay(50000);
+ 416   3              TR0=0;
+ 417   3              SPK=1;
+ 418   3              //delay(30000);
+ 419   3              LCD_init();
+ 420   3              LCD_Write_String("A#4");  uart_data='o';
+ 421   3              break;
+ 422   3            
+ 423   3            case 'I': //hiá»ƒn thá»‹ "B4" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 424   3      
+ 425   3              note_index=46;
+ 426   3              TH0=note_table[note_index];
+ 427   3              TL0=note_table[note_index+1];     
+ 428   3              TR0=1;
+ 429   3              delay(50000);
+ 430   3              TR0=0;
+ 431   3              SPK=1;
+ 432   3              //delay(30000);
+ 433   3              LCD_init();
+ 434   3              LCD_Write_String("B4"); uart_data='o';
+ 435   3              break;
+ 436   3            
+ 437   3            case 'O': //hiá»ƒn thá»‹ "C5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 438   3      
+ 439   3              note_index=48;
+ 440   3              TH0=note_table[note_index];
+ 441   3              TL0=note_table[note_index+1];     
+ 442   3              TR0=1;
+ 443   3              delay(50000);
+ 444   3              TR0=0;
+ 445   3              SPK=1;
+ 446   3              //delay(30000);
+ 447   3              LCD_init();
+ 448   3              LCD_Write_String("C5"); uart_data='o';
+ 449   3              break;
+ 450   3            case 'P': //hiá»ƒn thá»‹ "C#5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 451   3      
+ 452   3              note_index=50;
+ 453   3              TH0=note_table[note_index];
+ 454   3              TL0=note_table[note_index+1];     
+ 455   3              TR0=1;
+ 456   3              delay(500000);
+ 457   3              TR0=0;
+ 458   3              SPK=1;
+ 459   3              //delay(30000);
+ 460   3              LCD_init();
+ 461   3              LCD_Write_String("C#5");  uart_data='o';
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 9   
+
+ 462   3              break;
+ 463   3            case '1': //hiá»ƒn thá»‹ "D5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 464   3      
+ 465   3              note_index=52;
+ 466   3              TH0=note_table[note_index];
+ 467   3              TL0=note_table[note_index+1];     
+ 468   3              TR0=1;
+ 469   3              delay(50000);
+ 470   3              TR0=0;
+ 471   3              SPK=1;
+ 472   3              //delay(30000);
+ 473   3              LCD_init();
+ 474   3              LCD_Write_String("D5"); uart_data='o';
+ 475   3              break;
+ 476   3            case '2': //hiá»ƒn thá»‹ "D#5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 477   3      
+ 478   3              note_index=54;
+ 479   3              TH0=note_table[note_index];
+ 480   3              TL0=note_table[note_index+1];     
+ 481   3              TR0=1;
+ 482   3              delay(50000);
+ 483   3              TR0=0;
+ 484   3              SPK=1;
+ 485   3              //delay(30000);
+ 486   3              LCD_init();
+ 487   3              LCD_Write_String("D#5");  uart_data='o';
+ 488   3              break;
+ 489   3            case '3': //hiá»ƒn thá»‹ "E5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 490   3      
+ 491   3              note_index=56;
+ 492   3              TH0=note_table[note_index];
+ 493   3              TL0=note_table[note_index+1];     
+ 494   3              TR0=1;
+ 495   3              delay(50000);
+ 496   3              TR0=0;
+ 497   3              SPK=1;
+ 498   3              //delay(30000);
+ 499   3              LCD_init();
+ 500   3              LCD_Write_String("E5"); uart_data='o';
+ 501   3              break;
+ 502   3            case '4': //hiá»ƒn thá»‹ "F5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 503   3      
+ 504   3              note_index=58;
+ 505   3              TH0=note_table[note_index];
+ 506   3              TL0=note_table[note_index+1];     
+ 507   3              TR0=1;
+ 508   3              delay(50000);
+ 509   3              TR0=0;
+ 510   3              SPK=1;
+ 511   3              //delay(30000);
+ 512   3              LCD_init();
+ 513   3              LCD_Write_String("F5"); uart_data='o';
+ 514   3              break;
+ 515   3            case '5': //hiá»ƒn thá»‹ "F#5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 516   3      
+ 517   3              note_index=60;
+ 518   3              TH0=note_table[note_index];
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 10  
+
+ 519   3              TL0=note_table[note_index+1];     
+ 520   3              TR0=1;
+ 521   3              delay(50000);
+ 522   3              TR0=0;
+ 523   3              SPK=1;
+ 524   3              //delay(30000);
+ 525   3              LCD_init();
+ 526   3              LCD_Write_String("F#5");  uart_data='o';
+ 527   3              break;
+ 528   3            case '6': //hiá»ƒn thá»‹ "G5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 529   3      
+ 530   3              note_index=62;
+ 531   3              TH0=note_table[note_index];
+ 532   3              TL0=note_table[note_index+1];     
+ 533   3              TR0=1;
+ 534   3              delay(50000);
+ 535   3              TR0=0;
+ 536   3              SPK=1;
+ 537   3              //delay(30000);
+ 538   3              LCD_init();
+ 539   3              LCD_Write_String("G5"); uart_data='o';
+ 540   3              break;
+ 541   3            case '7': //hiá»ƒn thá»‹ "G#5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 542   3      
+ 543   3              note_index=64;
+ 544   3              TH0=note_table[note_index];
+ 545   3              TL0=note_table[note_index+1];     
+ 546   3              TR0=1;
+ 547   3              delay(50000);
+ 548   3              TR0=0;
+ 549   3              SPK=1;
+ 550   3              //delay(30000);
+ 551   3              LCD_init();
+ 552   3              LCD_Write_String("G#5");  uart_data='o';
+ 553   3              break;
+ 554   3            case '8': // hiá»ƒn thá»‹ "A5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»
+             -©ng lÃ  note si
+ 555   3      
+ 556   3              note_index=66;
+ 557   3              TH0=note_table[note_index];
+ 558   3              TL0=note_table[note_index+1];     
+ 559   3              TR0=1;
+ 560   3              delay(50000);
+ 561   3              TR0=0;
+ 562   3              SPK=1;
+ 563   3              //delay(30000);
+ 564   3              LCD_init();
+ 565   3              LCD_Write_String("A5"); uart_data='o';
+ 566   3              break;
+ 567   3            case '9': //sáº½ hiá»ƒn thá»‹ "A#5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ�
+             -�ng á»©ng lÃ  note si
+ 568   3      
+ 569   3              note_index=68;
+ 570   3              TH0=note_table[note_index];
+ 571   3              TL0=note_table[note_index+1];     
+ 572   3              TR0=1;
+ 573   3              //delay(500000);
+ 574   3              int k = 500000000000;
+*** ERROR C141 IN LINE 574 OF DisplayLED.c: syntax error near 'int', expected '__asm'
+*** ERROR C202 IN LINE 574 OF DisplayLED.c: 'k': undefined identifier
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 11  
+
+ 575   3              while(k)
+*** ERROR C202 IN LINE 575 OF DisplayLED.c: 'k': undefined identifier
+ 576   3              {
+ 577   4                k--;
+*** ERROR C202 IN LINE 577 OF DisplayLED.c: 'k': undefined identifier
+ 578   4                TR0=1;
+ 579   4              }
+ 580   3              TR0=0;
+ 581   3              SPK=1;
+ 582   3              //delay(30000);
+ 583   3              LCD_init();
+ 584   3              LCD_Write_String("A#5");  uart_data='o';
+ 585   3              break;
+ 586   3            case '0': //hiá»ƒn thá»‹ "B5" trÃªn mÃ n hÃ¬nh LCD vÃ  phÃ¡t ra note tÆ°Æ¡ng á»�
+             -�ng lÃ  note si
+ 587   3      
+ 588   3              note_index=70;
+ 589   3              TH0=note_table[note_index];
+ 590   3              TL0=note_table[note_index+1];     
+ 591   3              TR0=1;
+ 592   3              //delay(5000000000);
+ 593   3              int k = 500000000000;
+*** ERROR C141 IN LINE 593 OF DisplayLED.c: syntax error near 'int', expected '__asm'
+*** ERROR C202 IN LINE 593 OF DisplayLED.c: 'k': undefined identifier
+ 594   3              while(k)
+*** ERROR C202 IN LINE 594 OF DisplayLED.c: 'k': undefined identifier
+ 595   3              {
+ 596   4                k--;
+*** ERROR C202 IN LINE 596 OF DisplayLED.c: 'k': undefined identifier
+ 597   4                TR0=1;
+ 598   4              }
+ 599   3              TR0=0;
+ 600   3              SPK=1;
+ 601   3              //delay(300000000);
+ 602   3              LCD_init();
+ 603   3              LCD_Write_String("B5"); uart_data='o';
+ 604   3              break;
+ 605   3            default:
+ 606   3              LCD_init();
+ 607   3              LCD_Write_One_Char(uart_data);
+ 608   3              break;    
+ 609   3          }   
+ 610   2        } 
+ 611   1      }
+ 612          void Init_System()
+ 613          {
+ 614   1        //Thiet lap LCD o che do doc
+ 615   1        RW=1; 
+ 616   1      }
+ 617          void Delay_ms(int interval)
+ 618          {
+ 619   1        int i,j;
+ 620   1        for(i=0;i<1000;i++)
+ 621   1        {
+ 622   2          for(j=0;j<interval;j++);
+ 623   2        }
+ 624   1      }
+ 625          //Ham thuc hien gui mot lenh xuong LCD
+ 626          void LCD_Send_Command(unsigned char x)
+ 627          {
+ 628   1        LCD_DATA=x;
+ 629   1        RS=0; //Chon thanh ghi lenh
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 12  
+
+ 630   1        RW=0; //De ghi du lieu
+ 631   1        EN=1;
+ 632   1        Delay_ms(1);
+ 633   1        EN=0;   
+ 634   1        Wait_For_LCD(); //Doi cho LCD san sang
+ 635   1        EN=1;     
+ 636   1      }
+ 637          //Ham kiem tra va cho den khi LCD san sang
+ 638          void Wait_For_LCD()
+ 639          {
+ 640   1        Delay_ms(10);
+ 641   1      }
+ 642          void LCD_init()
+ 643          {
+ 644   1        LCD_Send_Command(0x38); //Chon che do 8 bit, 2 hang cho LCD
+ 645   1        LCD_Send_Command(0x0E); //Bat hien thi, nhap nhay con tro 
+ 646   1        LCD_Send_Command(0x01); //Xoa man hinh  
+ 647   1        LCD_Send_Command(0x80); //Ve dau dong
+ 648   1        
+ 649   1      }
+ 650          //Ham de LCD hien thi mot ky tu
+ 651          void LCD_Write_One_Char(unsigned char c)
+ 652          {
+ 653   1        LCD_DATA=c; //Dua du lieu vao thanh ghi 
+ 654   1        RS=1; //Chon thanh ghi du lieu
+ 655   1        RW=0;
+ 656   1        EN=1;
+ 657   1        Delay_ms(1);  
+ 658   1        EN=0;
+ 659   1        Wait_For_LCD(); 
+ 660   1        EN=1;
+ 661   1      }
+ 662          //Ham de LCD hien thi mot xau
+ 663          void LCD_Write_String(unsigned char *s)
+ 664          {
+ 665   1        unsigned char length;
+ 666   1        length=strlen(s); //Lay do dai xau
+ 667   1        while(length!=0)
+ 668   1        {
+ 669   2          LCD_Write_One_Char(*s); //Ghi ra LCD gia tri duoc tro boi con tro
+ 670   2          s++; //Tang con tro
+ 671   2          length--;        
+ 672   2        }
+ 673   1      }
+ 674          
+ 675          void serial_IT(void) interrupt 4 //hÃ m xá»­ lÃ½ ngáº¯t serial port khi truyá»n/ nháº­n x
+             -ong má»™t kÃ½ tá»±
+ 676          {
+ 677   1        if (RI == 1)
+ 678   1        { 
+ 679   2          RI = 0;     
+ 680   2          uart_data = SBUF;
+ 681   2          SBUF = uart_data;
+ 682   2        }
+ 683   1        else 
+ 684   1          TI = 0;     
+ 685   1      }
+ 686          
+ 687          void timer0() interrupt 1 //hÃ m xá»­ lÃ½ ngáº¯t trÃ n timer0
+ 688          {
+ 689   1        TH0=note_table[note_index];
+ 690   1        TL0=note_table[note_index+1];
+C51 COMPILER V9.60.0.0   DISPLAYLED                                                        01/15/2022 21:08:15 PAGE 13  
+
+ 691   1        SPK=~SPK;
+ 692   1      }
+ 693          
+ 694          void init()
+ 695          {
+ 696   1        TMOD=0x01;
+ 697   1        EA=1;
+ 698   1        ET0=1;
+ 699   1        TR0=0;
+ 700   1      }
+ 701          
+ 702          void delay(unsigned int time)
+ 703          {
+ 704   1        while(time--);
+ 705   1      } 
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  8 ERROR(S)
